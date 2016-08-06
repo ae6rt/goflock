@@ -44,6 +44,7 @@ func main() {
 		log.Println("lockfile removed")
 	}()
 
+	// what follows is the normal app logic
 	time.Sleep(10 * time.Second)
 	log.Println("done")
 }
