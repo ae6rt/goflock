@@ -1,48 +1,49 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
-
-	sigs := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	lock, err := os.Create("lockfile")
+	// https://github.com/golang/go/issues/8456
+	lock, err := os.OpenFile("lockfile", os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		log.Println(err)
+		return
 	}
 	defer lock.Close()
 
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigs
-		fmt.Println()
-		fmt.Println(sig)
+		log.Println(sig)
 		syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		os.Remove("lockfile")
-		done <- true
+		log.Println("lockfile removed by signal handler")
+		os.Exit(1)
 	}()
 
 	//--
 
-	fmt.Println("want lock")
+	log.Println("want lock")
 	err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	fmt.Println("acquired lock")
+	log.Println("acquired lock")
+
 	defer func() {
 		syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		os.Remove("lockfile")
+		log.Println("lockfile removed")
 	}()
 
-	<-done
+	time.Sleep(10 * time.Second)
+	log.Println("done")
 }
